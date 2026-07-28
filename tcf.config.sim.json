@@ -1,0 +1,31 @@
+{
+  "tc": {
+    "base_url": "http://host.docker.internal:8023",
+    "api_token": "frQ9suRB5AMaJBMJriPQLITAmYoQ16MnKM7Xmou64Mo8ahBU5gdi6qoVHygtx2RB",
+    "service_code": "svc-tcf-sim-20260727160627"
+  },
+  "agent": {
+    "feeder_identifier": "tcf-sim-20260727160627",
+    "host_name": "tcf-host-20260727160627",
+    "ip_address": "10.33.44.55",
+    "metadata": {
+      "os": "container-sim",
+      "simulation": "true",
+      "agent_version": "0.1.0"
+    }
+  },
+  "runtime": {
+    "task_sync_interval_seconds": 30,
+    "collect_interval_seconds": 1,
+    "flush_interval_seconds": 1,
+    "heartbeat_interval_seconds": 30,
+    "request_timeout_seconds": 15,
+    "max_batch_events": 200,
+    "max_batch_bytes": 262144,
+    "queue_max_bytes": 2147483648,
+    "max_retries": 12,
+    "retry_base_seconds": 2,
+    "retry_max_seconds": 300,
+    "retry_jitter_seconds": 3
+  }
+}

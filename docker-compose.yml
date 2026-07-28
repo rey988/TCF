@@ -1,0 +1,12 @@
+services:
+  tcf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: collector-tcf:dev
+    container_name: collector-tcf
+    working_dir: /app
+    volumes:
+      - ./tcf.config.json:/app/tcf.config.json
+      - ./state:/app/state
+    command: ["python", "tcf.py", "--config", "tcf.config.json", "status"]

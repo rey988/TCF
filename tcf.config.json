@@ -1,0 +1,30 @@
+{
+  "tc": {
+    "base_url": "http://localhost:8000",
+    "api_token": "",
+    "service_code": "svc-core-flow"
+  },
+  "agent": {
+    "feeder_identifier": null,
+    "host_name": null,
+    "ip_address": null,
+    "metadata": {
+      "agent_version": "0.1.0",
+      "os": "windows"
+    }
+  },
+  "runtime": {
+    "task_sync_interval_seconds": 30,
+    "collect_interval_seconds": 2,
+    "flush_interval_seconds": 5,
+    "heartbeat_interval_seconds": 30,
+    "request_timeout_seconds": 15,
+    "max_batch_events": 200,
+    "max_batch_bytes": 262144,
+    "queue_max_bytes": 2147483648,
+    "max_retries": 12,
+    "retry_base_seconds": 2,
+    "retry_max_seconds": 300,
+    "retry_jitter_seconds": 3
+  }
+}

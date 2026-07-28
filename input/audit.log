@@ -1,0 +1,1 @@
+{"user_snapshot":{"id":2201,"username":"compose-operator"},"action_label":"USER_LOGIN","action_code":"auth.login","target_snapshot":{"module":"auth"},"before_state":{"status":"offline"},"after_state":{"status":"online"},"ip_address":"10.10.3.30","user_agent":"TCF-Compose-Sim"}
