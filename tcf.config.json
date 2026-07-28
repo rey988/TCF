@@ -1,8 +1,8 @@
 {
   "tc": {
-    "base_url": "http://localhost:8000",
-    "api_token": "",
-    "service_code": "svc-core-flow"
+    "base_url": "http://host.docker.internal:8023",
+    "api_token": "u5FFjSCNUMqDsP0gKDjr3wLMRaSuHeszT9fx94vj0ZvtAUyp669i2ISvSPm7gdGJ",
+    "service_code": "svc-tcf-compose-20260728062159"
   },
   "agent": {
     "feeder_identifier": null,
