@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import logging
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-from .config import TCFConfig, write_example_config
+from .config import TCFConfig, detect_default_ip, write_example_config
 from .identity import IdentityStore
 from .runtime import TCFService
 from .state_db import StateDB
@@ -20,6 +22,13 @@ from .tc_client import TCClient
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.createConfig:
+        return cmd_create_config_interactive(Path(args.config))
+
+    if args.command is None:
+        parser.print_help()
+        return 1
 
     if args.command == "init-config":
         return cmd_init_config(Path(args.config))
@@ -59,9 +68,14 @@ def main() -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tcf", description="The Collector Feeder")
     parser.add_argument("--config", default="tcf.config.json", help="Path to TCF config JSON")
+    parser.add_argument(
+        "--createConfig",
+        action="store_true",
+        help="Create config interactively with guided prompts",
+    )
 
     sub = parser.add_subparsers(dest="command")
-    sub.required = True
+    sub.required = False
 
     sub.add_parser("init-config", help="Create example config file")
     sub.add_parser("run", help="Run foreground service loop")
@@ -82,6 +96,145 @@ def cmd_init_config(config_path: Path) -> int:
     write_example_config(config_path)
     print(f"Created {config_path}")
     return 0
+
+
+def cmd_create_config_interactive(config_path: Path) -> int:
+    if config_path.exists():
+        overwrite = _prompt_yes_no(
+            f"Config already exists at {config_path}. Overwrite?",
+            default=False,
+        )
+        if not overwrite:
+            print("Config creation cancelled.")
+            return 1
+
+    default_os = "windows" if os.name == "nt" else "linux"
+
+    tc_url = _prompt_text("TC base URL", default="http://host.docker.internal:8023", required=True)
+    tc_token = _prompt_secret("TC API token", required=True)
+    service_code = _prompt_text("Service code", default="svc-v3-backoffice", required=True)
+
+    feeder_identifier = _prompt_text("Feeder identifier (blank for auto-generate)", default="")
+    host_name = _prompt_text("Host name", default=socket.gethostname(), required=True)
+    ip_address = _prompt_text("IP address", default=detect_default_ip(), required=True)
+
+    metadata_agent_version = _prompt_text("Agent version", default="0.1.0", required=True)
+    metadata_os = _prompt_text("Agent OS label", default=default_os, required=True)
+
+    use_defaults = _prompt_yes_no("Use default runtime settings?", default=True)
+
+    runtime = {
+        "task_sync_interval_seconds": 30,
+        "collect_interval_seconds": 2,
+        "flush_interval_seconds": 5,
+        "heartbeat_interval_seconds": 30,
+        "request_timeout_seconds": 15,
+        "max_batch_events": 200,
+        "max_batch_bytes": 262144,
+        "queue_max_bytes": 2147483648,
+        "max_retries": 12,
+        "retry_base_seconds": 2,
+        "retry_max_seconds": 300,
+        "retry_jitter_seconds": 3,
+    }
+
+    if not use_defaults:
+        runtime["task_sync_interval_seconds"] = _prompt_int("Task sync interval seconds", default=30, min_value=1)
+        runtime["collect_interval_seconds"] = _prompt_int("Collect interval seconds", default=2, min_value=1)
+        runtime["flush_interval_seconds"] = _prompt_int("Flush interval seconds", default=5, min_value=1)
+        runtime["heartbeat_interval_seconds"] = _prompt_int("Heartbeat interval seconds", default=30, min_value=1)
+        runtime["request_timeout_seconds"] = _prompt_int("Request timeout seconds", default=15, min_value=1)
+        runtime["max_batch_events"] = _prompt_int("Max batch events", default=200, min_value=1)
+        runtime["max_batch_bytes"] = _prompt_int("Max batch bytes", default=262144, min_value=1024)
+        runtime["queue_max_bytes"] = _prompt_int("Queue max bytes", default=2147483648, min_value=1048576)
+        runtime["max_retries"] = _prompt_int("Max retries", default=12, min_value=1)
+        runtime["retry_base_seconds"] = _prompt_int("Retry base seconds", default=2, min_value=1)
+        runtime["retry_max_seconds"] = _prompt_int("Retry max seconds", default=300, min_value=1)
+        runtime["retry_jitter_seconds"] = _prompt_int("Retry jitter seconds", default=3, min_value=0)
+
+    config_payload = {
+        "tc": {
+            "base_url": tc_url,
+            "api_token": tc_token,
+            "service_code": service_code,
+        },
+        "agent": {
+            "feeder_identifier": feeder_identifier or None,
+            "host_name": host_name,
+            "ip_address": ip_address,
+            "metadata": {
+                "agent_version": metadata_agent_version,
+                "os": metadata_os,
+            },
+        },
+        "runtime": runtime,
+    }
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(config_payload, indent=2), encoding="utf-8")
+
+    state_dir = config_path.parent / "state"
+    input_dir = config_path.parent / "input"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    input_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Created {config_path}")
+    print(f"Created {state_dir}")
+    print(f"Created {input_dir}")
+    print("Next: python tcf.py --config " + str(config_path.name) + " sync-once")
+    return 0
+
+
+def _prompt_text(label: str, default: str = "", required: bool = False) -> str:
+    while True:
+        suffix = f" [{default}]" if default else ""
+        value = input(f"{label}{suffix}: ").strip()
+        if value:
+            return value
+        if default:
+            return default
+        if not required:
+            return ""
+        print("This field is required.")
+
+
+def _prompt_secret(label: str, required: bool = False) -> str:
+    while True:
+        value = getpass.getpass(f"{label}: ").strip()
+        if value:
+            return value
+        if not required:
+            return ""
+        print("This field is required.")
+
+
+def _prompt_yes_no(label: str, default: bool) -> bool:
+    default_text = "Y/n" if default else "y/N"
+    while True:
+        value = input(f"{label} ({default_text}): ").strip().lower()
+        if not value:
+            return default
+        if value in {"y", "yes"}:
+            return True
+        if value in {"n", "no"}:
+            return False
+        print("Please answer y or n.")
+
+
+def _prompt_int(label: str, default: int, min_value: int = 0) -> int:
+    while True:
+        value = input(f"{label} [{default}]: ").strip()
+        if not value:
+            return default
+        try:
+            parsed = int(value)
+        except ValueError:
+            print("Please enter a valid integer.")
+            continue
+        if parsed < min_value:
+            print(f"Value must be >= {min_value}.")
+            continue
+        return parsed
 
 
 def cmd_run(cfg: TCFConfig) -> int:
